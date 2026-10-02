@@ -1,0 +1,9 @@
+# Instrument control (pure-Python VISA backend, no NI/Keysight VISA install needed)
+pyvisa
+pyvisa-py
+# Data / analysis
+numpy
+scipy
+matplotlib
+# Run "# %%" cells interactively in VS Code
+ipykernel

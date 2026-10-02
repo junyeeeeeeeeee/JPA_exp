@@ -1,0 +1,12 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Experiment data (kept local, not pushed)
+experiment_results/
+
+# Editor / OS
+.vscode/
+.DS_Store
