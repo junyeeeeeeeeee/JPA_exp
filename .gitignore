@@ -1,5 +1,5 @@
 # Python
-.venv/
+AS_JPA_env/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
@@ -10,3 +10,6 @@ experiment_results/
 # Editor / OS
 .vscode/
 .DS_Store
+
+# Octave mixer calibration database (per instrument, kept local)
+opx_calibration/

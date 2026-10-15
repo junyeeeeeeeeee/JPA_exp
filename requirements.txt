@@ -1,9 +1,13 @@
 # Instrument control (pure-Python VISA backend, no NI/Keysight VISA install needed)
 pyvisa
 pyvisa-py
+# Serial (ASRL) instruments for pyvisa-py, e.g. SRS DC205 connected directly to the server by USB / RS-232
+pyserial
 # Data / analysis
 numpy
 scipy
 matplotlib
 # Run "# %%" cells interactively in VS Code
 ipykernel
+# Quantum Machines OPX+ / Octave client (QUA). The QOP server runs on the instrument; nothing else to install.
+qm-qua>=1.4,<2

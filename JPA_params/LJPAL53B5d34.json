@@ -1,0 +1,64 @@
+{
+  "sample_id": "LJPAL53B5d34",
+  "last_updated": "2026-10-13",
+  "device": {
+    "type": "lumped-element flux-pumped JPA (3-wave mixing, pump ≈ 2 f_r)",
+    "origin": "NCU, Yung-Fu Chen group",
+    "fabrication": "single-step optical lithography, Manhattan JJ (to be confirmed)",
+    "structure": "signal port - IDT capacitor - SQUID; pump/flux line to pump port",
+    "notes": ""
+  },
+  "wiring": {
+    "controller": "QM OPX+ con1 + Octave oct1 (cluster OPXplus_3, 10.21.30.201:9593); settings in experiments/opx_common.py SETUP",
+    "readout_drive": "Octave RF out 1 (OPX AO1/AO2) -> signal input line",
+    "readout_receive": "output chain -> Octave RF in 1 (OPX AI1/AI2)",
+    "pump_source": "Octave RF out 2 (OPX AO3/AO4) -> pump port via bias tee (RF side)",
+    "dc_bias_source": "OPX+ AO5 DC offset (|V| <= 0.5 V into 50 ohm)",
+    "dc_bias_path": "pump port via bias tee (DC side) (to be confirmed)",
+    "signal_input_attenuation_dB": 50,
+    "pump_line_attenuation_dB": 20,
+    "notes": "Since 2026-10-13 everything is on the OPX+/Octave; VNA, PSG and DC205 are disconnected. flux_calibration voltages refer to the OPX+ AO5 offset."
+  },
+  "flux_calibration": {
+    "flux_offset_V": null,
+    "V_per_Phi0": null,
+    "f_r_max_GHz": null,
+    "source_measurement": null
+  },
+  "operating_point": {
+    "flux_bias_V": null,
+    "phi_over_phi0": null,
+    "f_r_GHz": null,
+    "pump_frequency_GHz": null,
+    "pump_power_dBm": null,
+    "source_measurement": null
+  },
+  "circuit": {
+    "C_pF": null,
+    "C_ext_pF": null,
+    "L_s_pH": null,
+    "L_J0_pH": null,
+    "I_c_uA": null,
+    "M_pH": null,
+    "Q_ext": null,
+    "notes": "Do not use Mutus 2013 values (4.2 pF / 24 pH / 68 pH) as defaults; they are not this chip's design values."
+  },
+  "performance": {
+    "peak_gain_dB": null,
+    "bandwidth_3dB_MHz": null,
+    "P1dB_dBm": null,
+    "added_noise_photons": null
+  },
+  "reference_expectations": {
+    "notes": "From NCU theses/talks for similar LJPAs, NOT measured on this chip",
+    "f_r_range_GHz": [2, 6],
+    "pump_frequency_GHz": [11.2, 11.9],
+    "flux_bias_phi0": [0.33, 0.45],
+    "peak_gain_dB": [15, 25]
+  },
+  "history": [
+    {"date": "2026-10-05", "change": "created"},
+    {"date": "2026-10-13", "change": "signal input line 50 dB, pump line 20 dB total attenuation"},
+    {"date": "2026-10-13", "change": "wiring moved to OPX+ / Octave (readout RF out1 / RF in1, pump RF out2, flux AO5); VNA, PSG, DC205 disconnected"}
+  ]
+}
