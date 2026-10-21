@@ -339,6 +339,42 @@ def remove_delay(freq, s21, delay_s=None):
     return s21 * np.exp(2j * np.pi * freq * delay_s), delay_s
 
 
+def unwrap_2d(s21):
+    """Unwrapped phase of 1D or 2D S21 (rows = bias values). Each row is unwrapped along frequency; in 2D the
+    rows are then shifted by multiples of 2 pi so that they are continuous along the bias axis at the
+    frequency column with the strongest signal (a per-row unwrap from f_min jumps by 2 pi between rows
+    whenever the phase at f_min sits near +-pi)."""
+    ph = np.unwrap(np.angle(s21), axis=-1)
+    if ph.ndim == 2 and len(ph) > 1:
+        col = ph[:, np.argmax(np.abs(s21).min(axis=0))]
+        ph = ph + (np.unwrap(col) - col)[:, None]
+    return ph
+
+
+def background_trace(s21, ref="median", values=None):
+    """Complex background trace for normalization S21 / background (removes cable delay, standing waves and
+    the frequency dependence of the lines, circulators and amplifiers, which a linear delay cannot).
+    s21: 2D (rows = bias values). ref="median": median of the real and imaginary parts over the rows (the
+    resonance moves with bias, so at each frequency most rows are off resonance); ref=<number>: the row whose
+    bias in `values` is nearest (choose a bias where the resonance is outside the band)."""
+    s21 = np.atleast_2d(s21)
+    if isinstance(ref, str):
+        if ref != "median":
+            raise ValueError(f"background ref must be 'median' or a bias value, not {ref!r}")
+        return np.median(s21.real, axis=0) + 1j * np.median(s21.imag, axis=0)
+    return s21[np.argmin(np.abs(np.asarray(values) - ref))]
+
+
+def load_background(path, freq):
+    """Background trace from the data.npz of an earlier run on the same frequency grid (a 2D run gives its
+    complex median over the rows)."""
+    d = np.load(path)
+    if d["freq_Hz"].shape != freq.shape or not np.allclose(d["freq_Hz"], freq):
+        raise ValueError(f"{path}: frequency grid differs from this run's")
+    s = d["s21"]
+    return background_trace(s) if s.ndim == 2 else s
+
+
 # ---------------------------------------------------------------- files
 def load_jpa_params(sample):
     path = PARAMS_DIR / f"{sample}.json"

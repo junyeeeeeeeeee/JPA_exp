@@ -23,6 +23,8 @@ VOLTAGE_MAX = 0.5
 VOLTAGE_POINTS = 51
 
 ELECTRICAL_DELAY_S = None      # None: fit from the phase slope (one tau for all voltages); or a fixed value [s]
+BACKGROUND = "median"          # extra plots of S21 / background: "median" (complex median over voltages),
+                               # a voltage [V] (that row, e.g. resonance out of band), or None (no normalization)
 
 VNA_IP, VNA_PORT, CH = "192.168.1.23", 5025, 1
 DC205_PORT = "/dev/dc205"      # DC205 USB serial port (udev rule /etc/udev/rules.d/99-dc205.rules)
@@ -53,7 +55,7 @@ params = {
     "vna_power_dBm": VNA_POWER_DBM, "freq_min_Hz": FREQ_MIN_HZ, "freq_max_Hz": FREQ_MAX_HZ,
     "if_bandwidth_Hz": IF_BW_HZ, "points": POINTS,
     "voltage_min_V": VOLTAGE_MIN, "voltage_max_V": VOLTAGE_MAX, "voltage_points": VOLTAGE_POINTS,
-    "electrical_delay_s": ELECTRICAL_DELAY_S,
+    "electrical_delay_s": ELECTRICAL_DELAY_S, "background": BACKGROUND,
     "vna": f"{VNA_IP}:{VNA_PORT} CH{CH}", "psg": PSG_IP,
     "dc_control": "direct", "dc205_port": DC205_PORT, "dc_range": DC_RANGE, "dc_settle_s": DC_SETTLE_S,
 }
@@ -135,14 +137,21 @@ d = np.load(run_dir / "data.npz")
 freq, volt, s21 = d["freq_Hz"], d["voltage_V"], d["s21"]
 s21_c, tau = jc.remove_delay(freq, s21, ELECTRICAL_DELAY_S)
 amp_db = 20 * np.log10(np.abs(s21))
-phase = np.unwrap(np.angle(s21_c), axis=1)     # unwrap along frequency, per voltage
+phase = jc.unwrap_2d(s21_c)     # unwrap along frequency, rows aligned along voltage (no 2 pi jumps between rows)
 print(f"  {len(volt)} voltages x {len(freq)} points; electrical delay removed: {tau * 1e9:.4f} ns "
       f"({'fitted, median over voltages' if ELECTRICAL_DELAY_S is None else 'fixed'})")
 
 title = f"{SAMPLE}  DC direct  {VNA_POWER_DBM:g} dBm  IFBW {IF_BW_HZ:g} Hz"
 figs = []
-for z, label, fname in [(amp_db, "|S21| [dB]", "S21_amp.png"),
-                        (phase, "Unwrapped phase [rad]", "S21_phase.png")]:
+plots = [(amp_db, "|S21| [dB]", "S21_amp.png", ""),
+         (phase, "Unwrapped phase [rad]", "S21_phase.png", f"\nelectrical delay {tau * 1e9:.3f} ns removed")]
+if BACKGROUND is not None:
+    s21_n = s21 / jc.background_trace(s21, BACKGROUND, volt)
+    bg = "complex median over voltages" if BACKGROUND == "median" else f"row at {BACKGROUND:g} V"
+    plots += [(20 * np.log10(np.abs(s21_n)), "|S21| / background [dB]", "S21_amp_norm.png", f"\nnormalized by {bg}"),
+              (jc.unwrap_2d(s21_n), "Phase relative to background [rad]", "S21_phase_norm.png",
+               f"\nnormalized by {bg}")]
+for z, label, fname, extra in plots:
     fig, ax = plt.subplots(figsize=(8, 5))
     if len(volt) > 1:
         m = ax.pcolormesh(freq / 1e9, volt, z, shading="nearest", cmap="viridis")
@@ -151,7 +160,6 @@ for z, label, fname in [(amp_db, "|S21| [dB]", "S21_amp.png"),
     else:                      # only one voltage measured (e.g. interrupted): plot it as a line
         ax.plot(freq / 1e9, z[0])
         ax.set(ylabel=label)
-    extra = f"\nelectrical delay {tau * 1e9:.3f} ns removed" if "phase" in fname else ""
     ax.set(xlabel="Frequency [GHz]", title=title + extra)
     fig.tight_layout()
     fig.savefig(run_dir / fname, dpi=150)
@@ -160,6 +168,7 @@ plt.show()
 
 meta = json.loads((run_dir / "params.json").read_text(encoding="utf-8"))
 meta["analysis"] = {"electrical_delay_s": tau, "delay_fitted": ELECTRICAL_DELAY_S is None,
+                    "phase_unwrap": "2d (frequency, then rows aligned along voltage)", "background": BACKGROUND,
                     "voltages_analysed": int(len(volt))}
 jc.save_json(run_dir / "params.json", meta)
 print(f"  saved: {', '.join(sorted(p.name for p in run_dir.iterdir()))}")

@@ -24,6 +24,8 @@ FLUX_V = 0.0                   # OPX flux offset [V], |V| <= 0.5
 FLUX_SETTLE_S = 0.1            # wait after setting the flux, before the sweep [s]
 
 ELECTRICAL_DELAY_S = None      # None: fit from the phase slope; or a fixed value [s]
+BACKGROUND_NPZ = None          # data.npz of a reference run on the same frequency grid (e.g. resonance out of band;
+                               # a 2D run gives its complex median): extra plot of S21 / background; None: no plot
 
 VNA_IP, VNA_PORT, CH = "192.168.1.123", 5025, 1
 SWEEP_TIMEOUT_S = 600.0
@@ -51,7 +53,7 @@ params = {
     "experiment": EXPERIMENT, "instruments": "OPX+ flux, ZNB", "sample": SAMPLE,
     "vna_power_dBm": VNA_POWER_DBM, "freq_min_Hz": FREQ_MIN_HZ, "freq_max_Hz": FREQ_MAX_HZ,
     "if_bandwidth_Hz": IF_BW_HZ, "points": POINTS, "sparam": SPARAM, "flux_V": FLUX_V,
-    "flux_settle_s": FLUX_SETTLE_S, "electrical_delay_s": ELECTRICAL_DELAY_S,
+    "flux_settle_s": FLUX_SETTLE_S, "electrical_delay_s": ELECTRICAL_DELAY_S, "background_npz": BACKGROUND_NPZ,
     "vna": f"{VNA_IP}:{VNA_PORT} CH{CH}", "opx_setup": p,
 }
 print(f"{EXPERIMENT} (OPX+ flux, ZNB)  sample {SAMPLE}: {SPARAM} {FREQ_MIN_HZ/1e9:g}-{FREQ_MAX_HZ/1e9:g} GHz, "
@@ -121,12 +123,25 @@ ax2.set(xlabel="Frequency [GHz]", ylabel="Unwrapped phase [rad]",
 ax2.grid(alpha=0.3)
 fig2.tight_layout()
 fig2.savefig(run_dir / "S21_phase.png", dpi=150)
+
+if BACKGROUND_NPZ:
+    s21_n = s21 / jc.load_background(BACKGROUND_NPZ, freq)
+    fig3, (ax3a, ax3b) = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
+    ax3a.plot(freq / 1e9, 20 * np.log10(np.abs(s21_n)))
+    ax3a.set(ylabel=f"|{SPARAM}| / background [dB]", title=f"{title}\nnormalized by {BACKGROUND_NPZ}")
+    ax3b.plot(freq / 1e9, np.unwrap(np.angle(s21_n)))
+    ax3b.set(xlabel="Frequency [GHz]", ylabel="Phase relative to background [rad]")
+    for a in (ax3a, ax3b):
+        a.grid(alpha=0.3)
+    fig3.tight_layout()
+    fig3.savefig(run_dir / "S21_norm.png", dpi=150)
 plt.show()
 
 np.savetxt(run_dir / "data.csv", np.column_stack([freq, s21.real, s21.imag, amp_db, phase]), delimiter=",",
            header="freq_Hz,S21_re,S21_im,S21_amp_dB,S21_phase_unwrapped_rad_delay_removed", comments="")
 meta = json.loads((run_dir / "params.json").read_text(encoding="utf-8"))
 meta["analysis"] = {"electrical_delay_s": tau, "delay_fitted": ELECTRICAL_DELAY_S is None,
+                    "background_npz": str(BACKGROUND_NPZ) if BACKGROUND_NPZ else None,
                     "amp_dB_min": float(amp_db.min()), "freq_at_amp_min_Hz": float(freq[np.argmin(amp_db)])}
 jc.save_json(run_dir / "params.json", meta)
 print(f"  saved: {', '.join(sorted(p.name for p in run_dir.iterdir()))}")

@@ -15,17 +15,19 @@ Results: experiment_results/<SAMPLE>/02_2_flux_offset_S21_2d/<YYYYmmdd_HHMMSS>_o
 SAMPLE = "LJPAL53B5d34"        # JPA_params/<SAMPLE>.json
 
 VNA_POWER_DBM = -40.0          # ZNB source power [dBm]
-FREQ_MIN_HZ = 4.0e9
-FREQ_MAX_HZ = 8.0e9
-IF_BW_HZ = 1.0e3
+FREQ_MIN_HZ = 4.5e9
+FREQ_MAX_HZ = 7.0e9
+IF_BW_HZ = 1.0e2
 POINTS = 2001
 SPARAM = "S21"                 # ZNB20 has 4 ports: S<out><in>
-FLUX_MIN_V = -0.05              # OPX flux scan [V], |V| <= 0.5
-FLUX_MAX_V = 0.05
-FLUX_POINTS = 51
+FLUX_MIN_V = -0.025              # OPX flux scan [V], |V| <= 0.5
+FLUX_MAX_V = 0.015
+FLUX_POINTS = 81
 FLUX_SETTLE_S = 0.1            # wait after each flux step, before the sweep [s]
 
 ELECTRICAL_DELAY_S = None      # None: fit from the phase slope (one tau for all flux values); or a fixed value [s]
+BACKGROUND = "median"          # extra plots of S21 / background: "median" (complex median over flux values),
+                               # a flux value [V] (that row, e.g. resonance out of band), or None (no normalization)
 
 VNA_IP, VNA_PORT, CH = "192.168.1.123", 5025, 1
 SWEEP_TIMEOUT_S = 600.0
@@ -57,7 +59,7 @@ params = {
     "vna_power_dBm": VNA_POWER_DBM, "freq_min_Hz": FREQ_MIN_HZ, "freq_max_Hz": FREQ_MAX_HZ,
     "if_bandwidth_Hz": IF_BW_HZ, "points": POINTS, "sparam": SPARAM,
     "flux_min_V": FLUX_MIN_V, "flux_max_V": FLUX_MAX_V, "flux_points": FLUX_POINTS, "flux_settle_s": FLUX_SETTLE_S,
-    "electrical_delay_s": ELECTRICAL_DELAY_S, "vna": f"{VNA_IP}:{VNA_PORT} CH{CH}", "opx_setup": p,
+    "electrical_delay_s": ELECTRICAL_DELAY_S, "background": BACKGROUND, "vna": f"{VNA_IP}:{VNA_PORT} CH{CH}", "opx_setup": p,
 }
 print(f"{EXPERIMENT} (OPX+ flux, ZNB)  sample {SAMPLE}: {SPARAM} {FREQ_MIN_HZ/1e9:g}-{FREQ_MAX_HZ/1e9:g} GHz, "
       f"{POINTS} pts, IFBW {IF_BW_HZ:g} Hz, {VNA_POWER_DBM:g} dBm, flux {FLUX_MIN_V:g} -> {FLUX_MAX_V:g} V "
@@ -114,14 +116,22 @@ d = np.load(run_dir / "data.npz")
 freq, flux, s21 = d["freq_Hz"], d["flux_V"], d["s21"]
 s21_c, tau = jc.remove_delay(freq, s21, ELECTRICAL_DELAY_S)
 amp_db = 20 * np.log10(np.abs(s21))
-phase = np.unwrap(np.angle(s21_c), axis=1)     # unwrap along frequency, per flux value
+phase = jc.unwrap_2d(s21_c)     # unwrap along frequency, rows aligned along flux (no 2 pi jumps between rows)
 print(f"  {len(flux)} flux values x {len(freq)} points; electrical delay removed: {tau * 1e9:.4f} ns "
       f"({'fitted, median over flux values' if ELECTRICAL_DELAY_S is None else 'fixed'})")
 
 title = f"{SAMPLE}  ZNB {SPARAM}  {VNA_POWER_DBM:g} dBm  IFBW {IF_BW_HZ:g} Hz"
+plots = [(amp_db, f"|{SPARAM}| [dB]", "S21_amp.png", ""),
+         (phase, "Unwrapped phase [rad]", "S21_phase.png", f"\nelectrical delay {tau * 1e9:.3f} ns removed")]
+if BACKGROUND is not None:
+    s21_n = s21 / jc.background_trace(s21, BACKGROUND, flux)
+    bg = "complex median over flux" if BACKGROUND == "median" else f"row at flux {BACKGROUND:g} V"
+    plots += [(20 * np.log10(np.abs(s21_n)), f"|{SPARAM}| / background [dB]", "S21_amp_norm.png",
+               f"\nnormalized by {bg}"),
+              (jc.unwrap_2d(s21_n), "Phase relative to background [rad]", "S21_phase_norm.png",
+               f"\nnormalized by {bg}")]
 figs = []
-for z, label, fname in [(amp_db, f"|{SPARAM}| [dB]", "S21_amp.png"),
-                        (phase, "Unwrapped phase [rad]", "S21_phase.png")]:
+for z, label, fname, extra in plots:
     fig, ax = plt.subplots(figsize=(8, 5))
     if len(flux) > 1:
         m = ax.pcolormesh(freq / 1e9, flux, z, shading="nearest", cmap="viridis")
@@ -130,7 +140,6 @@ for z, label, fname in [(amp_db, f"|{SPARAM}| [dB]", "S21_amp.png"),
     else:                      # only one flux value measured (e.g. interrupted): plot it as a line
         ax.plot(freq / 1e9, z[0])
         ax.set(ylabel=label)
-    extra = f"\nelectrical delay {tau * 1e9:.3f} ns removed" if "phase" in fname else ""
     ax.set(xlabel="Frequency [GHz]", title=title + extra)
     fig.tight_layout()
     fig.savefig(run_dir / fname, dpi=150)
@@ -139,6 +148,7 @@ plt.show()
 
 meta = json.loads((run_dir / "params.json").read_text(encoding="utf-8"))
 meta["analysis"] = {"electrical_delay_s": tau, "delay_fitted": ELECTRICAL_DELAY_S is None,
+                    "phase_unwrap": "2d (frequency, then rows aligned along flux)", "background": BACKGROUND,
                     "flux_values_analysed": int(len(flux))}
 jc.save_json(run_dir / "params.json", meta)
 print(f"  saved: {', '.join(sorted(p.name for p in run_dir.iterdir()))}")
